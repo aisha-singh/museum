@@ -1,0 +1,101 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Gallery</title>
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:Georgia,serif}
+#hud{position:fixed;left:0;right:0;bottom:16px;text-align:center;color:#fff9;font-size:14px;letter-spacing:.08em;pointer-events:none}
+#start{position:fixed;inset:0;background:#000d;color:#eee;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;font-size:22px}
+#start small{margin-top:12px;font-size:14px;opacity:.7}
+</style></head><body>
+<div id="start">Click to enter the gallery<small>↑ / W walk · ← → / A D turn · ↓ / S back</small></div>
+<div id="hud">↑ walk · ← → turn</div>
+<script type="module">
+import * as THREE from './three.module.js';
+const COUNT = 35, SPACING = 4.2, PER_SIDE = Math.ceil(COUNT/2);
+const HALL_W = 8, HALL_L = PER_SIDE*SPACING + 8, WALL_H = 4.5;
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight); renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x111111);
+scene.fog = new THREE.Fog(0x111111, 12, 40);
+const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, .1, 100);
+camera.position.set(0, 1.65, HALL_L/2 - 3);
+
+scene.add(new THREE.AmbientLight(0xffffff, .55));
+
+// floor, ceiling, walls
+const floorTex = (()=>{const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d');
+  for(let y=0;y<2;y++)for(let x=0;x<2;x++){g.fillStyle=(x+y)%2?'#8a7660':'#9b866d';g.fillRect(x*128,y*128,128,128);}
+  const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(HALL_W/2,HALL_L/2);t.colorSpace=THREE.SRGBColorSpace;return t;})();
+const mk = (w,h,mat,pos,rot)=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),mat);m.position.copy(pos);m.rotation.set(...rot);scene.add(m);return m;};
+mk(HALL_W,HALL_L,new THREE.MeshStandardMaterial({map:floorTex,roughness:.5}),new THREE.Vector3(0,0,0),[-Math.PI/2,0,0]);
+mk(HALL_W,HALL_L,new THREE.MeshStandardMaterial({color:0xf2efe8}),new THREE.Vector3(0,WALL_H,0),[Math.PI/2,0,0]);
+const wallMat = new THREE.MeshStandardMaterial({color:0xe9e4da,roughness:.9});
+mk(HALL_L,WALL_H,wallMat,new THREE.Vector3(-HALL_W/2,WALL_H/2,0),[0,Math.PI/2,0]);
+mk(HALL_L,WALL_H,wallMat,new THREE.Vector3(HALL_W/2,WALL_H/2,0),[0,-Math.PI/2,0]);
+mk(HALL_W,WALL_H,wallMat,new THREE.Vector3(0,WALL_H/2,-HALL_L/2),[0,0,0]);
+mk(HALL_W,WALL_H,wallMat,new THREE.Vector3(0,WALL_H/2,HALL_L/2),[0,Math.PI,0]);
+
+// benches down the middle
+const benchMat = new THREE.MeshStandardMaterial({color:0x3b2a20});
+for(let i=0;i<PER_SIDE;i+=2){const b=new THREE.Mesh(new THREE.BoxGeometry(1.8,.45,.6),benchMat);
+  b.position.set(0,.225,-HALL_L/2+4+i*SPACING+SPACING/2);scene.add(b);}
+
+// paintings
+const loader = new THREE.TextureLoader();
+const frameMat = new THREE.MeshStandardMaterial({color:0x1a1410,roughness:.6});
+for(let i=0;i<COUNT;i++){
+  const side = i%2 ? 1 : -1;             // -1 left wall, +1 right wall
+  const slot = Math.floor(i/2);
+  const z = -HALL_L/2 + 4 + slot*SPACING + SPACING/2;
+  const x = side*(HALL_W/2);
+  const n = String(i+1).padStart(2,'0');
+  loader.load(`photos/p${n}.jpg`, tex=>{
+    tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+    const asp = tex.image.width/tex.image.height;
+    const maxH = 2.2, maxW = 2.8;
+    let h = maxH, w = h*asp; if(w>maxW){w=maxW;h=w/asp;}
+    const g = new THREE.Group();
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(w+.2,h+.2,.08),frameMat); g.add(frame);
+    const pic = new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:tex}));
+    pic.position.z = .045; g.add(pic);
+    g.position.set(x - side*.05, 2.1, z);
+    g.rotation.y = side<0 ? Math.PI/2 : -Math.PI/2;
+    scene.add(g);
+    const spot = new THREE.SpotLight(0xfff1d6, 18, 9, .6, .6, 1.5);
+    spot.position.set(x - side*1.6, WALL_H-.2, z); spot.target.position.set(x,2.1,z);
+    scene.add(spot, spot.target);
+    const plaque = new THREE.Mesh(new THREE.PlaneGeometry(.3,.12),new THREE.MeshBasicMaterial({color:0xbba77a}));
+    plaque.position.set(0,-h/2-.35,.045); g.add(plaque);
+  });
+}
+// a few ceiling lights for the floor
+for(let z=-HALL_L/2+4; z<HALL_L/2; z+=SPACING*2){const l=new THREE.PointLight(0xfff4e0,6,10,1.5);l.position.set(0,WALL_H-.3,z);scene.add(l);}
+
+// controls
+const keys = {};
+addEventListener('keydown',e=>{keys[e.code]=true; if(e.code.startsWith('Arrow'))e.preventDefault();});
+addEventListener('keyup',e=>keys[e.code]=false);
+document.getElementById('start').onclick=e=>e.currentTarget.style.display='none';
+let yaw = 0, vel = 0, yawVel = 0;
+const clock = new THREE.Clock();
+function tick(){
+  const dt = Math.min(clock.getDelta(), .05);
+  const fwd = (keys.ArrowUp||keys.KeyW?1:0) - (keys.ArrowDown||keys.KeyS?1:0);
+  const turn = (keys.ArrowLeft||keys.KeyA?1:0) - (keys.ArrowRight||keys.KeyD?1:0);
+  vel += (fwd*3.2 - vel)*Math.min(1,dt*8);
+  yawVel += (turn*1.6 - yawVel)*Math.min(1,dt*10);
+  yaw += yawVel*dt;
+  camera.position.x += -Math.sin(yaw)*vel*dt;
+  camera.position.z += -Math.cos(yaw)*vel*dt;
+  camera.position.x = THREE.MathUtils.clamp(camera.position.x, -HALL_W/2+1.2, HALL_W/2-1.2);
+  camera.position.z = THREE.MathUtils.clamp(camera.position.z, -HALL_L/2+1, HALL_L/2-1);
+  camera.position.y = 1.65 + Math.sin(performance.now()/180)*.025*Math.min(1,Math.abs(vel));
+  camera.rotation.set(0,yaw,0);
+  renderer.render(scene,camera);
+  requestAnimationFrame(tick);
+}
+tick();
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+</script></body></html>
