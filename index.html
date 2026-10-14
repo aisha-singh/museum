@@ -1,98 +1,231 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>Gallery</title>
+<html><head><meta charset="utf-8"><title>The Little Gallery</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:Georgia,serif}
-#hud{position:fixed;left:0;right:0;bottom:16px;text-align:center;color:#fff9;font-size:14px;letter-spacing:.08em;pointer-events:none}
-#start{position:fixed;inset:0;background:#000d;color:#eee;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;font-size:22px}
-#start small{margin-top:12px;font-size:14px;opacity:.7}
+html,body{margin:0;height:100%;background:#1c130d;overflow:hidden;font-family:Georgia,'Times New Roman',serif}
+#vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,#1c0f0666 85%,#1c0f06aa 100%)}
+#hud{position:fixed;left:0;right:0;bottom:18px;text-align:center;color:#f3e3c7aa;font-size:14px;letter-spacing:.1em;pointer-events:none;transition:opacity 1.5s}
+#start{position:fixed;inset:0;background:radial-gradient(ellipse at center,#4a3020ee,#1c130df5);color:#f3e3c7;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;text-align:center;transition:opacity .8s}
+#start h1{font-weight:normal;font-style:italic;font-size:48px;margin:0 0 6px;letter-spacing:.04em}
+#start p{margin:0 0 28px;opacity:.75;font-size:16px}
+#start .btn{border:1px solid #f3e3c7aa;padding:10px 28px;border-radius:2px;letter-spacing:.2em;font-size:13px;text-transform:uppercase}
+#start:hover .btn{background:#f3e3c722}
+#start small{margin-top:22px;font-size:13px;opacity:.6;letter-spacing:.06em}
 </style></head><body>
-<div id="start">Click to enter the gallery<small>↑ / W walk · ← → / A D turn · ↓ / S back</small></div>
+<div id="vignette"></div>
+<div id="start"><h1>The Little Gallery</h1><p>a quiet walk through some favorite moments</p><div class="btn">Step inside</div><small>↑ / W walk &nbsp;·&nbsp; ← → / A D turn &nbsp;·&nbsp; ↓ / S step back</small></div>
 <div id="hud">↑ walk · ← → turn</div>
 <script type="module">
 import * as THREE from './three.module.js';
 const COUNT = 35, SPACING = 4.2, PER_SIDE = Math.ceil(COUNT/2);
-const HALL_W = 8, HALL_L = PER_SIDE*SPACING + 8, WALL_H = 4.5;
+const HALL_W = 8, HALL_L = PER_SIDE*SPACING + 8, WALL_H = 4.5, WAINS = 1.0;
+const FIRST_Z = -HALL_L/2 + 4 + SPACING/2;
 
 const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth, innerHeight); renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.1;
 document.body.appendChild(renderer.domElement);
-const scene = new THREE.Scene(); scene.background = new THREE.Color(0x111111);
-scene.fog = new THREE.Fog(0x111111, 12, 40);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x24170f);
+scene.fog = new THREE.Fog(0x24170f, 10, 38);
 const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, .1, 100);
 camera.position.set(0, 1.65, HALL_L/2 - 3);
 
-scene.add(new THREE.AmbientLight(0xffffff, .55));
+// warm, soft base light
+scene.add(new THREE.HemisphereLight(0xffe2b8, 0x5a3a24, .9));
 
-// floor, ceiling, walls
-const floorTex = (()=>{const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d');
-  for(let y=0;y<2;y++)for(let x=0;x<2;x++){g.fillStyle=(x+y)%2?'#8a7660':'#9b866d';g.fillRect(x*128,y*128,128,128);}
-  const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(HALL_W/2,HALL_L/2);t.colorSpace=THREE.SRGBColorSpace;return t;})();
-const mk = (w,h,mat,pos,rot)=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),mat);m.position.copy(pos);m.rotation.set(...rot);scene.add(m);return m;};
-mk(HALL_W,HALL_L,new THREE.MeshStandardMaterial({map:floorTex,roughness:.5}),new THREE.Vector3(0,0,0),[-Math.PI/2,0,0]);
-mk(HALL_W,HALL_L,new THREE.MeshStandardMaterial({color:0xf2efe8}),new THREE.Vector3(0,WALL_H,0),[Math.PI/2,0,0]);
-const wallMat = new THREE.MeshStandardMaterial({color:0xe9e4da,roughness:.9});
-mk(HALL_L,WALL_H,wallMat,new THREE.Vector3(-HALL_W/2,WALL_H/2,0),[0,Math.PI/2,0]);
-mk(HALL_L,WALL_H,wallMat,new THREE.Vector3(HALL_W/2,WALL_H/2,0),[0,-Math.PI/2,0]);
-mk(HALL_W,WALL_H,wallMat,new THREE.Vector3(0,WALL_H/2,-HALL_L/2),[0,0,0]);
-mk(HALL_W,WALL_H,wallMat,new THREE.Vector3(0,WALL_H/2,HALL_L/2),[0,Math.PI,0]);
+// ---------- helpers ----------
+const rnd = (a,b)=>a+Math.random()*(b-a);
+function canvasTex(w,h,draw,repeat){
+  const c=document.createElement('canvas');c.width=w;c.height=h;draw(c.getContext('2d'),w,h);
+  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;
+  if(repeat){t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(...repeat);} return t;
+}
+const std=(o)=>new THREE.MeshStandardMaterial(o);
+function add(geo,mat,x,y,z,ry=0){const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.rotation.y=ry;scene.add(m);return m;}
+const plane=(w,h,mat,x,y,z,rx,ry)=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),mat);m.position.set(x,y,z);m.rotation.set(rx,ry,0);scene.add(m);return m;};
 
-// benches down the middle
-const benchMat = new THREE.MeshStandardMaterial({color:0x3b2a20});
-for(let i=0;i<PER_SIDE;i+=2){const b=new THREE.Mesh(new THREE.BoxGeometry(1.8,.45,.6),benchMat);
-  b.position.set(0,.225,-HALL_L/2+4+i*SPACING+SPACING/2);scene.add(b);}
+// ---------- floor: wood planks ----------
+const floorTex = canvasTex(512,512,(g,w,h)=>{
+  const rows=8, ph=h/rows;
+  for(let r=0;r<rows;r++){
+    let x=-rnd(0,200);
+    while(x<w){
+      const len=rnd(180,380), l=rnd(34,46);
+      g.fillStyle=`hsl(${rnd(24,32)} ${rnd(35,48)}% ${l}%)`; g.fillRect(x,r*ph,len,ph);
+      g.strokeStyle='#00000040'; g.lineWidth=2; g.strokeRect(x,r*ph,len,ph);
+      g.strokeStyle='#00000012'; g.lineWidth=1;
+      for(let k=0;k<5;k++){const yy=r*ph+rnd(4,ph-4);g.beginPath();g.moveTo(x,yy);g.lineTo(x+len,yy+rnd(-2,2));g.stroke();}
+      x+=len;
+    }
+  }
+},[HALL_W/3.2,HALL_L/3.2]);
+plane(HALL_W,HALL_L,std({map:floorTex,roughness:.55,metalness:.05}),0,0,0,-Math.PI/2,0);
 
-// paintings
+// ---------- rug runner ----------
+const RUG_W=3.2, RUG_L=HALL_L-5;
+const rugTex = canvasTex(256,1024,(g,w,h)=>{
+  g.fillStyle='#7a2e2a';g.fillRect(0,0,w,h);
+  g.strokeStyle='#e8cf9a';g.lineWidth=6;g.strokeRect(14,14,w-28,h-28);
+  g.strokeStyle='#c9a35e';g.lineWidth=2;g.strokeRect(28,28,w-56,h-56);
+  g.fillStyle='#2f4a46';g.fillRect(44,44,w-88,h-88);
+  g.strokeStyle='#e8cf9a55';g.lineWidth=2;
+  for(let y=80;y<h-60;y+=110){
+    g.beginPath();g.moveTo(w/2,y-34);g.lineTo(w/2+34,y);g.lineTo(w/2,y+34);g.lineTo(w/2-34,y);g.closePath();g.stroke();
+    g.fillStyle='#c9a35e55';g.beginPath();g.arc(w/2,y,7,0,7);g.fill();
+  }
+  for(let i=0;i<2500;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*.06})`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
+});
+plane(RUG_W,RUG_L,std({map:rugTex,roughness:1}),0,.012,0,-Math.PI/2,0);
+
+// ---------- walls: plaster above, painted wainscot below ----------
+const plasterTex = canvasTex(256,256,(g,w,h)=>{
+  g.fillStyle='#c9a77c';g.fillRect(0,0,w,h);
+  for(let i=0;i<4000;i++){g.fillStyle=`rgba(${Math.random()<.5?'255,240,210':'60,30,10'},${Math.random()*.05})`;g.fillRect(Math.random()*w,Math.random()*h,3,3);}
+},[HALL_L/4,1]);
+const upperMat=std({map:plasterTex,roughness:.95});
+const woodMat =std({color:0x2e4a3c,roughness:.6});      // deep green wainscot
+const trimMat =std({color:0xf0e4cc,roughness:.5});      // cream trim
+const beamMat =std({color:0x4a2f1c,roughness:.7});
+
+for(const s of [-1,1]){
+  const x=s*HALL_W/2, ry=s<0?Math.PI/2:-Math.PI/2;
+  plane(HALL_L,WALL_H-WAINS,upperMat,x,WAINS+(WALL_H-WAINS)/2,0,0,ry);
+  plane(HALL_L,WAINS,woodMat,x,WAINS/2,0,0,ry);
+  // wainscot panel inserts
+  for(let z=-HALL_L/2+1.2; z<HALL_L/2-1; z+=1.4)
+    add(new THREE.BoxGeometry(.03,.62,1.0),std({color:0x37574a,roughness:.6}),x-s*.015,WAINS/2,z);
+  add(new THREE.BoxGeometry(.1,.1,HALL_L),trimMat,x-s*.05,.05,0);               // baseboard
+  add(new THREE.BoxGeometry(.1,.07,HALL_L),trimMat,x-s*.05,WAINS,0);            // chair rail
+  add(new THREE.BoxGeometry(.2,.2,HALL_L),trimMat,x-s*.1,WALL_H-.1,0);          // crown molding
+}
+for(const e of [-1,1]){
+  plane(HALL_W,WALL_H,upperMat,0,WALL_H/2,e*HALL_L/2,0,e<0?0:Math.PI);
+  add(new THREE.BoxGeometry(HALL_W,.1,.1),trimMat,0,.05,e*(HALL_L/2-.05));
+}
+// ceiling + beams
+plane(HALL_W,HALL_L,std({color:0xefe0c4,roughness:1}),0,WALL_H,0,Math.PI/2,0);
+for(let z=-HALL_L/2+SPACING; z<HALL_L/2; z+=SPACING)
+  add(new THREE.BoxGeometry(HALL_W,.28,.3),beamMat,0,WALL_H-.14,z);
+
+// ---------- soft glow texture for wall washes & lamps ----------
+const glowTex = canvasTex(128,128,(g,w,h)=>{
+  const r=g.createRadialGradient(w/2,h/2,0,w/2,h/2,w/2);
+  r.addColorStop(0,'rgba(255,214,150,1)');r.addColorStop(.5,'rgba(255,190,110,.35)');r.addColorStop(1,'rgba(255,170,80,0)');
+  g.fillStyle=r;g.fillRect(0,0,w,h);
+});
+
+// ---------- paintings ----------
 const loader = new THREE.TextureLoader();
-const frameMat = new THREE.MeshStandardMaterial({color:0x1a1410,roughness:.6});
+const frameMat = std({color:0x5a3820,roughness:.45,metalness:.1});
+const goldMat  = std({color:0xb98f4a,roughness:.35,metalness:.5});
+const matMat   = std({color:0xf4ecda,roughness:1});
 for(let i=0;i<COUNT;i++){
-  const side = i%2 ? 1 : -1;             // -1 left wall, +1 right wall
-  const slot = Math.floor(i/2);
-  const z = -HALL_L/2 + 4 + slot*SPACING + SPACING/2;
-  const x = side*(HALL_W/2);
-  const n = String(i+1).padStart(2,'0');
-  loader.load(`photos/p${n}.jpg`, tex=>{
-    tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-    const asp = tex.image.width/tex.image.height;
-    const maxH = 2.2, maxW = 2.8;
-    let h = maxH, w = h*asp; if(w>maxW){w=maxW;h=w/asp;}
-    const g = new THREE.Group();
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(w+.2,h+.2,.08),frameMat); g.add(frame);
-    const pic = new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:tex}));
-    pic.position.z = .045; g.add(pic);
-    g.position.set(x - side*.05, 2.1, z);
-    g.rotation.y = side<0 ? Math.PI/2 : -Math.PI/2;
+  const side = i%2 ? 1 : -1, z = FIRST_Z + Math.floor(i/2)*SPACING, x = side*HALL_W/2;
+  loader.load(`photos/p${String(i+1).padStart(2,'0')}.jpg`, tex=>{
+    tex.colorSpace=THREE.SRGBColorSpace; tex.anisotropy=8;
+    const asp=tex.image.width/tex.image.height, cy=2.45;
+    let h=2.0, w=h*asp; if(w>2.5){w=2.5;h=w/asp;}
+    const g=new THREE.Group();
+    // glow wash on the wall behind
+    const wash=new THREE.Mesh(new THREE.PlaneGeometry(w+2.6,h+2.4),new THREE.MeshBasicMaterial({map:glowTex,transparent:true,opacity:.42,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));
+    wash.position.z=.02; g.add(wash);
+    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(w+.34,h+.34,.1),frameMat),{}));
+    const inner=new THREE.Mesh(new THREE.BoxGeometry(w+.2,h+.2,.12),goldMat); g.add(inner);
+    const mat=new THREE.Mesh(new THREE.BoxGeometry(w+.16,h+.16,.125),matMat); g.add(mat);
+    const pm=new THREE.MeshBasicMaterial({map:tex,color:0xf2ece2,toneMapped:false});
+    const pic=new THREE.Mesh(new THREE.PlaneGeometry(w,h),pm); pic.position.z=.07; g.add(pic);
+    // brass plaque
+    const pl=new THREE.Mesh(new THREE.BoxGeometry(.32,.1,.02),goldMat); pl.position.set(0,-h/2-.42,.0); g.add(pl);
+    // little picture light
+    const arm=new THREE.Mesh(new THREE.BoxGeometry(.5,.05,.05),goldMat); arm.position.set(0,h/2+.3,.1); g.add(arm);
+    const bulb=new THREE.Mesh(new THREE.SphereGeometry(.035),new THREE.MeshBasicMaterial({color:0xffe2a8})); bulb.position.set(0,h/2+.28,.14); g.add(bulb);
+    g.position.set(x - side*.1, cy, z); g.rotation.y = side<0 ? Math.PI/2 : -Math.PI/2;
     scene.add(g);
-    const spot = new THREE.SpotLight(0xfff1d6, 18, 9, .6, .6, 1.5);
-    spot.position.set(x - side*1.6, WALL_H-.2, z); spot.target.position.set(x,2.1,z);
-    scene.add(spot, spot.target);
-    const plaque = new THREE.Mesh(new THREE.PlaneGeometry(.3,.12),new THREE.MeshBasicMaterial({color:0xbba77a}));
-    plaque.position.set(0,-h/2-.35,.045); g.add(plaque);
   });
 }
-// a few ceiling lights for the floor
-for(let z=-HALL_L/2+4; z<HALL_L/2; z+=SPACING*2){const l=new THREE.PointLight(0xfff4e0,6,10,1.5);l.position.set(0,WALL_H-.3,z);scene.add(l);}
 
-// controls
-const keys = {};
-addEventListener('keydown',e=>{keys[e.code]=true; if(e.code.startsWith('Arrow'))e.preventDefault();});
+// ---------- pendant lamps (the real lights) ----------
+const lampShade = std({color:0xd8b277,roughness:.5,emissive:0xffb85c,emissiveIntensity:.9,side:THREE.DoubleSide});
+const lampPts=[];
+for(let z=-HALL_L/2+SPACING; z<HALL_L/2-1; z+=SPACING*2) lampPts.push(z);
+for(const z of lampPts){
+  add(new THREE.CylinderGeometry(.015,.015,1.0),beamMat,0,WALL_H-.5-.14,z);
+  const shade=add(new THREE.ConeGeometry(.38,.4,24,1,true),lampShade,0,WALL_H-1.2,z);
+  add(new THREE.SphereGeometry(.12),new THREE.MeshBasicMaterial({color:0xfff0c8}),0,WALL_H-1.25,z);
+  const halo=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,transparent:true,opacity:.55,blending:THREE.AdditiveBlending,depthWrite:false}));
+  halo.scale.set(2.8,2.8,1);halo.position.set(0,WALL_H-1.3,z);scene.add(halo);
+  const pl=new THREE.PointLight(0xffc27a,9,13,1.6);pl.position.set(0,WALL_H-1.4,z);scene.add(pl);
+}
+
+// ---------- benches (cushioned, along the walls) ----------
+const cushion=std({color:0x8a3a32,roughness:1});
+for(let i=1;i<PER_SIDE;i+=2){
+  const z=FIRST_Z + i*SPACING - SPACING*.5*0, side=(i%4===1)?-1:1, bx=side*3.0;
+  add(new THREE.BoxGeometry(.5,.08,1.6),beamMat,bx,.42,z);
+  add(new THREE.BoxGeometry(.44,.1,1.5),cushion,bx,.5,z);
+  for(const dz of [-.7,.7]) for(const dx of [-.18,.18]) add(new THREE.BoxGeometry(.05,.4,.05),beamMat,bx+dx,.2,z+dz);
+}
+
+// ---------- plants ----------
+const potMat=std({color:0xa4562f,roughness:.8}), leafMats=[0x3f7a45,0x2f6a3a,0x5a8f4a].map(c=>std({color:c,roughness:.7}));
+function plant(x,z,sc=1){
+  const g=new THREE.Group();
+  const pot=new THREE.Mesh(new THREE.CylinderGeometry(.28*sc,.2*sc,.45*sc,16),potMat);pot.position.y=.225*sc;g.add(pot);
+  for(let k=0;k<14;k++){
+    const leaf=new THREE.Mesh(new THREE.SphereGeometry(.2*sc,8,6),leafMats[k%3]);
+    leaf.scale.set(.5,1.6,.3);const a=k/14*Math.PI*2, r=rnd(.05,.22)*sc;
+    leaf.position.set(Math.cos(a)*r,(.65+rnd(0,.55))*sc,Math.sin(a)*r);
+    leaf.rotation.set(Math.sin(a)*.5,a,Math.cos(a)*.5);g.add(leaf);
+  }
+  g.position.set(x,0,z);scene.add(g);
+}
+for(let i=0;i<=PER_SIDE;i++){
+  const z=FIRST_Z + (i-.5)*SPACING, s=i%2?1:-1;
+  if(z>-HALL_L/2+1&&z<HALL_L/2-1) plant(s*(HALL_W/2-.6),z,1+(i%3)*.12);
+}
+plant(-HALL_W/2+.8,-HALL_L/2+.8,1.5); plant(HALL_W/2-.8,-HALL_L/2+.8,1.5);
+
+// ---------- end-wall: a big window with moonlight ----------
+const winTex=canvasTex(256,384,(g,w,h)=>{
+  const gr=g.createLinearGradient(0,0,0,h);gr.addColorStop(0,'#27355f');gr.addColorStop(1,'#e59a62');
+  g.fillStyle=gr;g.fillRect(0,0,w,h);
+  g.fillStyle='#fff8';for(let i=0;i<40;i++){g.fillRect(Math.random()*w,Math.random()*h*.5,2,2);}
+  g.fillStyle='#18141f';g.beginPath();g.moveTo(0,h);for(let x=0;x<=w;x+=16)g.lineTo(x,h-60-Math.sin(x*.05)*18-Math.random()*14);g.lineTo(w,h);g.fill();
+  g.strokeStyle='#f0e4cc';g.lineWidth=8;g.strokeRect(4,4,w-8,h-8);g.beginPath();g.moveTo(w/2,0);g.lineTo(w/2,h);g.moveTo(0,h*.5);g.lineTo(w,h*.5);g.stroke();
+});
+plane(2.6,3.2,new THREE.MeshBasicMaterial({map:winTex,toneMapped:false}),0,2.4,-HALL_L/2+.03,0,0);
+add(new THREE.BoxGeometry(3.0,.12,.25),trimMat,0,.75+.85,-HALL_L/2+.12);
+
+// ---------- floating dust motes ----------
+const N=260, pos=new Float32Array(N*3), spd=new Float32Array(N);
+for(let i=0;i<N;i++){pos[i*3]=rnd(-HALL_W/2,HALL_W/2);pos[i*3+1]=rnd(.3,WALL_H-.3);pos[i*3+2]=rnd(-HALL_L/2,HALL_L/2);spd[i]=rnd(.01,.05);}
+const dustGeo=new THREE.BufferGeometry();dustGeo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+scene.add(new THREE.Points(dustGeo,new THREE.PointsMaterial({map:glowTex,size:.09,transparent:true,opacity:.5,blending:THREE.AdditiveBlending,depthWrite:false})));
+
+// ---------- controls ----------
+const keys={};
+addEventListener('keydown',e=>{keys[e.code]=true; if(e.code.startsWith('Arrow')||e.code==='Space')e.preventDefault();});
 addEventListener('keyup',e=>keys[e.code]=false);
-document.getElementById('start').onclick=e=>e.currentTarget.style.display='none';
-let yaw = 0, vel = 0, yawVel = 0;
-const clock = new THREE.Clock();
+const start=document.getElementById('start'), hud=document.getElementById('hud');
+start.onclick=()=>{start.style.opacity=0;setTimeout(()=>start.style.display='none',800);setTimeout(()=>hud.style.opacity=0,6000);};
+let yaw=0, vel=0, yawVel=0, t0=performance.now();
+const clock=new THREE.Clock();
 function tick(){
-  const dt = Math.min(clock.getDelta(), .05);
-  const fwd = (keys.ArrowUp||keys.KeyW?1:0) - (keys.ArrowDown||keys.KeyS?1:0);
-  const turn = (keys.ArrowLeft||keys.KeyA?1:0) - (keys.ArrowRight||keys.KeyD?1:0);
-  vel += (fwd*3.2 - vel)*Math.min(1,dt*8);
-  yawVel += (turn*1.6 - yawVel)*Math.min(1,dt*10);
-  yaw += yawVel*dt;
-  camera.position.x += -Math.sin(yaw)*vel*dt;
-  camera.position.z += -Math.cos(yaw)*vel*dt;
-  camera.position.x = THREE.MathUtils.clamp(camera.position.x, -HALL_W/2+1.2, HALL_W/2-1.2);
-  camera.position.z = THREE.MathUtils.clamp(camera.position.z, -HALL_L/2+1, HALL_L/2-1);
-  camera.position.y = 1.65 + Math.sin(performance.now()/180)*.025*Math.min(1,Math.abs(vel));
-  camera.rotation.set(0,yaw,0);
+  const dt=Math.min(clock.getDelta(),.05), t=(performance.now()-t0)/1000;
+  const fwd=(keys.ArrowUp||keys.KeyW?1:0)-(keys.ArrowDown||keys.KeyS?1:0);
+  const turn=(keys.ArrowLeft||keys.KeyA?1:0)-(keys.ArrowRight||keys.KeyD?1:0);
+  vel+=(fwd*2.8-vel)*Math.min(1,dt*6);
+  yawVel+=(turn*1.5-yawVel)*Math.min(1,dt*8);
+  yaw+=yawVel*dt;
+  camera.position.x+=-Math.sin(yaw)*vel*dt;
+  camera.position.z+=-Math.cos(yaw)*vel*dt;
+  camera.position.x=THREE.MathUtils.clamp(camera.position.x,-HALL_W/2+1.2,HALL_W/2-1.2);
+  camera.position.z=THREE.MathUtils.clamp(camera.position.z,-HALL_L/2+1.5,HALL_L/2-1);
+  camera.position.y=1.65+Math.sin(t*7)*.022*Math.min(1,Math.abs(vel));
+  camera.rotation.set(0,yaw,Math.sin(t*3.5)*.003*Math.min(1,Math.abs(vel)));
+  for(let i=0;i<N;i++){pos[i*3+1]+=spd[i]*dt;pos[i*3]+=Math.sin(t*.4+i)*.0015;if(pos[i*3+1]>WALL_H-.2)pos[i*3+1]=.3;}
+  dustGeo.attributes.position.needsUpdate=true;
   renderer.render(scene,camera);
   requestAnimationFrame(tick);
 }
